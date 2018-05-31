@@ -21,6 +21,26 @@ endfunction()
 add_library(rxui src/rxui.h)
 configure(rxui)
 
+add_library(rxui-efl src/rxui-efl.h)
+configure(rxui-efl)
+target_compile_definitions(rxui-efl PUBLIC RXUI_BACKEND_EFL)
+find_package(Elementary REQUIRED)
+if (ELEMENTARY_FOUND AND NOT TARGET Elementary::efl)
+    add_library(Elementary::efl INTERFACE IMPORTED)
+    set_target_properties(Elementary::efl PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES
+            "${ELEMENTARY_INCLUDE_DIRS}"
+            INTERFACE_LINK_LIBRARIES
+            "${ELEMENTARY_LIBRARIES}"
+            INTERFACE_COMPILE_DEFINITIONS
+            "${ELEMENTARY_DEFINITIONS_STR}"
+            )
+endif ()
+target_link_libraries(rxui-efl
+        PUBLIC
+        Elementary::efl
+        )
+
 add_library(rxui-gtk src/rxui-gtk.h)
 configure(rxui-gtk)
 target_compile_definitions(rxui-gtk PUBLIC RXUI_BACKEND_GTK)
@@ -40,6 +60,10 @@ target_link_libraries(rxui-qt
         )
 
 function(test name files)
+    add_executable(${name}-efl test/7guis/00-common.h test/7guis/00-common-efl.h ${files})
+    configure(${name}-efl)
+    target_link_libraries(${name}-efl rxui-efl)
+
     add_executable(${name}-gtk test/7guis/00-common.h test/7guis/00-common-gtk.h ${files})
     configure(${name}-gtk)
     target_link_libraries(${name}-gtk rxui-gtk)

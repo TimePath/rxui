@@ -85,6 +85,8 @@ namespace rxui {
         }
     };
 
+    class Root;
+
     template<class Self, class Props>
     class Component {
         friend class Top;
@@ -101,6 +103,12 @@ namespace rxui {
         virtual ~Component() = default;
 
         virtual rxui::Element<void> render() = 0;
+
+        // fixme: don't like this
+        virtual void componentWillMount(Root *root)
+        {
+            (void) root;
+        };
 
         void componentDidMount()
         {
@@ -160,6 +168,7 @@ namespace rxui {
             Element<void> &elem = *new Element<void>(_elem);
             auto &it = *root->lookup(elem);
             it.props = elem.props.get();
+            it.componentWillMount(root);
 
             const bool first = true;
             if (!force && !first && !it.shouldComponentUpdate()) {
