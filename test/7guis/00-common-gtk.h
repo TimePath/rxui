@@ -26,15 +26,9 @@ static void activate(GtkApplication *app)
     auto root = new GtkRoot(GTK_CONTAINER(window));
     auto refresh = new std::function<void()>{};
     *refresh = [=]() {
-        auto parent = root->container;
-        auto list = gtk_container_get_children(parent);
-        if (list) {
-            gtk_container_remove(parent, GTK_WIDGET(list->data));
-        }
-
         auto element = render(*state, *refresh);
         rxui::render(element, *root);
-        gtk_widget_show_all(GTK_WIDGET(parent));
     };
     (*refresh)();
+    gtk_widget_show(GTK_WIDGET(window));
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <gtk/gtk.h>
 
@@ -20,9 +21,47 @@ public:
         new(&self) GtkRoot(GTK_CONTAINER(props));
     }
 
+    struct Ref {
+        GtkWidget *w;
+        int status;
+    };
+
+    std::vector<Ref> refs;
+
+    void beginChildren() override
+    {
+        auto list = gtk_container_get_children(container);
+        for (auto iter = list; iter; iter = g_list_next(iter)) {
+            auto w = GTK_WIDGET(iter->data);
+            refs.push_back(Ref{w, -1});
+        }
+        g_list_free(list);
+    }
+
     void push(void *it) override
     {
-        gtk_container_add(GTK_CONTAINER(container), GTK_WIDGET(it));
+        auto w = GTK_WIDGET(it);
+        gtk_widget_show(w);
+        auto ref = std::find_if(std::begin(refs), std::end(refs), [&](Ref &it) {
+            return it.w == w;
+        });
+        if (ref != std::end(refs)) {
+            ref->status = 0;
+        } else {
+            refs.push_back(Ref{w, 1});
+        }
+    }
+
+    void endChildren() override
+    {
+        for (const auto &ref : refs) {
+            if (ref.status < 0) {
+                gtk_container_remove(container, ref.w);
+            } else if (ref.status > 0) {
+                gtk_container_add(container, ref.w);
+            }
+        }
+        refs.clear();
     }
 };
 
@@ -125,6 +164,11 @@ public:
                 self->props->onChange(value);
             }
         }), self);
+
+        auto layout = GTK_CELL_LAYOUT(handle);
+        auto renderer = gtk_cell_renderer_text_new();
+        gtk_cell_layout_pack_start(layout, renderer, TRUE);
+        gtk_cell_layout_add_attribute(layout, renderer, "text", 1);
     }
 
     ~Combo() override
@@ -149,10 +193,6 @@ public:
         gtk_combo_box_set_model(handle, GTK_TREE_MODEL(store));
         g_object_unref(store);
         gtk_combo_box_set_id_column(handle, 0);
-
-        auto renderer = gtk_cell_renderer_text_new();
-        gtk_cell_layout_pack_start(GTK_CELL_LAYOUT(handle), renderer, TRUE);
-        gtk_cell_layout_add_attribute(GTK_CELL_LAYOUT(handle), renderer, "text", 1);
 
         g_signal_handler_block(handle, self->changed);
         gtk_combo_box_set_active_id(handle, self->props->selected.c_str());
@@ -257,6 +297,10 @@ public:
                 self->props->onChange(std::string{value});
             }
         }), self);
+
+        auto renderer = gtk_cell_renderer_text_new();
+        auto column = gtk_tree_view_column_new_with_attributes("", renderer, "text", 1, nullptr);
+        gtk_tree_view_append_column(handle, column);
     }
 
     rxui::Element<void> render() override
@@ -293,9 +337,6 @@ public:
         }
 
         gtk_tree_view_set_headers_visible(handle, false);
-        auto renderer = gtk_cell_renderer_text_new();
-        auto column = gtk_tree_view_column_new_with_attributes("", renderer, "text", 1, nullptr);
-        gtk_tree_view_append_column(handle, column);
 
         return rxui::intrinsic(self->handle);
     }

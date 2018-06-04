@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <typeinfo>
@@ -59,6 +60,11 @@ namespace rxui {
             {
                 this->_construct(out);
             }
+
+            bool operator==(TypeRef<void> &other)
+            {
+                return this->info() == other.info();
+            }
         };
     }
 
@@ -89,6 +95,8 @@ namespace rxui {
 
     template<class Self, class Props>
     class Component {
+        friend class Root;
+
         friend class Top;
 
     public:
@@ -97,6 +105,7 @@ namespace rxui {
         static constexpr detail::TypeRef<_self> T{};
 
     protected:
+        detail::TypeRef<void> *type;
         const Props *props;
 
         // componentWillUnmount
@@ -128,6 +137,8 @@ namespace rxui {
     };
 
     class Root {
+        std::map<std::string, Element<void>> elements;
+        std::map<std::string, Component<void, void> *> components;
     protected:
         const char *name;
         std::size_t size;
@@ -135,63 +146,101 @@ namespace rxui {
 
         virtual ~Root() = default;
 
-        Component<void, void> *lookup(Element<void> &elem)
-        {
-            // todo: re-use existing instances
-            auto &T = elem.type;
-            auto *mem = malloc(this->size + T.size());
-            auto *obj = reinterpret_cast<void *>(reinterpret_cast<std::uint8_t *>(mem) + this->size);
-            T.construct(obj);
-            return reinterpret_cast<Component<void, void> *>(obj);
+        struct ComponentState {
+            bool rootInit;
         };
+
+        Component<void, void> *lookup(Element<void> &_elem, bool &added)
+        {
+            elements[_elem.key] = _elem;
+            printf("lookup[%s]\n", _elem.key.c_str());
+            Element<void> &elem = elements[_elem.key];
+
+            Component<void, void> *c;
+            auto found = components.find(_elem.key);
+            bool notEnd = found != components.end();
+            bool typeMatch = notEnd && *found->second->type == _elem.type;
+            printf("nend: %d, types: %d\n", notEnd, typeMatch);
+            if (notEnd && typeMatch) {
+                added = false;
+                c = found->second;
+                printf("re-used a %s\n", elem.type.info().name());
+            } else {
+                added = true;
+                auto &T = elem.type;
+                auto mem = malloc(sizeof(ComponentState) + this->size + T.size());
+                auto priv = ComponentState{};
+                priv.rootInit = false;
+                *reinterpret_cast<ComponentState *>(mem) = priv;
+                auto ptr = reinterpret_cast<std::uint8_t *>(mem) + sizeof(ComponentState) + this->size;
+                c = reinterpret_cast<Component<void, void> *>(ptr);
+                T.construct(c);
+                components[_elem.key] = c;
+            }
+            c->type = &elem.type;
+            c->props = elem.props.get();
+            if (added) {
+                printf("mount %s\n", elem.type.info().name());
+                c->componentWillMount(this);
+            }
+            return c;
+        };
+
+        virtual void beginChildren()
+        {};
 
         virtual void push(void *) = 0;
 
-        Root &newroot(Component<void, void> &instance, void *props)
+        virtual void endChildren()
+        {};
+
+        Root *newroot(Component<void, void> &instance, void *props)
         {
-            auto &root = *reinterpret_cast<Root *>(reinterpret_cast<std::uint8_t *>(&instance) - size);
-            init(root, props);
+            auto ptr = reinterpret_cast<std::uint8_t *>(&instance) - this->size - sizeof(ComponentState);
+            auto root = reinterpret_cast<Root *>(ptr);
+            if (!reinterpret_cast<ComponentState *>(ptr)->rootInit) {
+                init(*root, props);
+            }
             return root;
         }
 
     protected:
 
         virtual void init(Root &self, void *props) = 0;
+
     };
 
     class Top {
     public:
-        static void render(Element<void> &_elem, Root *root, bool force = false)
+        static void render(Element<void> &elem, Root *root, bool force = false)
         {
-            // copy to heap
-            // todo: track these
-            Element<void> &elem = *new Element<void>(_elem);
-            auto &it = *root->lookup(elem);
-            it.props = elem.props.get();
-            it.componentWillMount(root);
+            bool first = true;
+            auto &component = *root->lookup(elem, first);
 
-            const bool first = true;
-            if (!force && !first && !it.shouldComponentUpdate()) {
+            printf("force: %d, first: %d, update: %d\n", force, first, component.shouldComponentUpdate());
+            if (!force && !first && !component.shouldComponentUpdate()) {
                 return;
             }
 
-            auto next = it.render();
+            auto next = component.render();
             void *nextProps = next.props.get();
             if (next._flags & Flags::Intrinsic) {
                 root->push(nextProps);
             }
             if (next._flags & Flags::Portal) {
-                root = &root->newroot(it, nextProps);
+                root = root->newroot(component, nextProps);
             }
             if (next._flags & Flags::Fragment) {
+                root->beginChildren();
                 for (auto &it : elem.children) { // fixme: buttonBox not passing children
                     render(it, root, force);
                 }
+                root->endChildren();
             }
             if (first) {
-                it.componentDidMount();
+                component.componentDidMount();
             } else {
-                it.componentDidUpdate();
+                component.componentDidUpdate();
             }
         }
     };
@@ -204,6 +253,12 @@ namespace rxui {
             $.key = "";
             $.props = std::make_shared<typename Component::_props>(props);
             $.children = {children...};
+            for (std::size_t i = 0; i < $.children.size(); ++i) {
+                auto &it = $.children[i];
+                if (it.key == "") {
+                    it.key = std::to_string(i);
+                }
+            }
             $.type = Component::T;
         });
     }
@@ -222,6 +277,8 @@ namespace rxui {
 
     void render(Element<void> &elem, Root &root)
     {
+        root.beginChildren();
         Top::render(elem, &root);
+        root.endChildren();
     }
 }
