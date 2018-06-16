@@ -25,18 +25,15 @@ class NativeComponent : public rxui::Component<Self, Props> {
 
 using gulong = unsigned long;
 
-struct ComboState
-{
+struct ComboState {
     gulong changed;
 };
 
-struct EntryState
-{
+struct EntryState {
     gulong changed;
 };
 
-struct ListState
-{
+struct ListState {
     gulong changed;
 };
 

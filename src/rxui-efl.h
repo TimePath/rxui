@@ -31,7 +31,9 @@ template<class Self, class Props>
 class NativeComponent : public rxui::Component<Self, Props> {
     void componentWillMount(rxui::Root *root) override
     {
-        reinterpret_cast<Lazy *>(static_cast<Self *>(this)->handle.get())->get(dynamic_cast<EflRoot *>(root)->container);
+        reinterpret_cast<Lazy *>(static_cast<Self *>(this)->handle.get())->get(
+                dynamic_cast<EflRoot *>(root)->container
+        );
     }
 };
 

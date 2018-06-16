@@ -16,8 +16,7 @@ void QtRoot::init(rxui::Root &self, void *props)
 void QtRoot::beginChildren()
 {
     auto self = reinterpret_cast<QLayout *>(container);
-    for (int i = 0; i < self->count(); ++i)
-    {
+    for (int i = 0; i < self->count(); ++i) {
         auto w = self->itemAt(i)->widget();
         refs.push_back(Ref{w, -1});
     }
@@ -256,5 +255,3 @@ rxui::Element<> List::render()
 
     return rxui::intrinsic(self->handle);
 }
-
-
