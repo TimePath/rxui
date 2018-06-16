@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../src/rxui-qt.h"
+#include <QtWidgets>
 
 static void activate(QApplication *app);
 
@@ -12,7 +13,7 @@ int main(int argc, char **argv)
     return status;
 }
 
-static rxui::Element<void> render(State &state, std::function<void()> &refresh);
+static rxui::Element<> render(State &state, std::function<void()> &refresh);
 
 static void activate(QApplication *)
 {

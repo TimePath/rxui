@@ -70,34 +70,69 @@ namespace rxui {
 
     class Top;
 
+    class Root;
+
+    template<class Self, class Props>
+    class Component;
+
+    template<class Props = void>
+    class Element;
+
     enum Flags : std::uint8_t {
         Intrinsic = 1 << 0,
         Portal = 1 << 1,
         Fragment = 1 << 2,
     };
 
-    template<class Props>
-    class Element {
-    public:
-        std::string key;
-        std::shared_ptr<Props> props;
-        std::vector<Element<void>> children;
-        detail::TypeRef<void> type;
-        std::uint8_t _flags;
+    void render(Element<> &elem, Root &root);
 
-        operator Element<void> &()
-        {
-            return *reinterpret_cast<Element<void> *>(this);
-        }
+    template<class Component, class... E>
+    Element<typename Component::_props>
+    createElement(detail::TypeRef<Component>, typename Component::_props props, E ...children);
+
+    template<class T>
+    Element<> intrinsic(std::shared_ptr<T> props, std::uint8_t flags = 0);
+
+    // impl
+
+    class Top {
+    public:
+        static void render(Element<> &elem, Root *root, bool force = false);
     };
 
-    class Root;
+    class Root {
+        std::map<std::string, Element<>> elements;
+        std::map<std::string, Component<void, void> *> components;
+    protected:
+        const char *name;
+        std::size_t size;
+    public:
+
+        virtual ~Root() = default;
+
+        Component<void, void> *lookup(Element<> &_elem, bool &added);
+
+        virtual void beginChildren()
+        {}
+
+        virtual void push(void *) = 0;
+
+        virtual void endChildren()
+        {}
+
+        Root *newroot(Component<void, void> &instance, void *props);
+
+    protected:
+
+        virtual void init(Root &self, void *props) = 0;
+
+    };
 
     template<class Self, class Props>
     class Component {
-        friend class Root;
-
         friend class Top;
+
+        friend class Root;
 
     public:
         using _self = Self;
@@ -111,13 +146,13 @@ namespace rxui {
         // componentWillUnmount
         virtual ~Component() = default;
 
-        virtual rxui::Element<void> render() = 0;
+        virtual rxui::Element<> render() = 0;
 
         // fixme: don't like this
         virtual void componentWillMount(Root *root)
         {
             (void) root;
-        };
+        }
 
         void componentDidMount()
         {
@@ -133,121 +168,26 @@ namespace rxui {
         {
             // after update render
         }
-
     };
 
-    class Root {
-        std::map<std::string, Element<void>> elements;
-        std::map<std::string, Component<void, void> *> components;
-    protected:
-        const char *name;
-        std::size_t size;
+    template<class Props>
+    class Element {
     public:
+        std::string key;
+        std::shared_ptr<Props> props;
+        std::vector<Element<>> children;
+        detail::TypeRef<void> type;
+        std::uint8_t _flags = 0;
 
-        virtual ~Root() = default;
-
-        struct ComponentState {
-            bool rootInit;
-        };
-
-        Component<void, void> *lookup(Element<void> &_elem, bool &added)
+        operator Element<> &() // NOLINT
         {
-            elements[_elem.key] = _elem;
-            printf("lookup[%s]\n", _elem.key.c_str());
-            Element<void> &elem = elements[_elem.key];
-
-            Component<void, void> *c;
-            auto found = components.find(_elem.key);
-            bool notEnd = found != components.end();
-            bool typeMatch = notEnd && *found->second->type == _elem.type;
-            printf("nend: %d, types: %d\n", notEnd, typeMatch);
-            if (notEnd && typeMatch) {
-                added = false;
-                c = found->second;
-                printf("re-used a %s\n", elem.type.info().name());
-            } else {
-                added = true;
-                auto &T = elem.type;
-                auto mem = malloc(sizeof(ComponentState) + this->size + T.size());
-                auto priv = ComponentState{};
-                priv.rootInit = false;
-                *reinterpret_cast<ComponentState *>(mem) = priv;
-                auto ptr = reinterpret_cast<std::uint8_t *>(mem) + sizeof(ComponentState) + this->size;
-                c = reinterpret_cast<Component<void, void> *>(ptr);
-                T.construct(c);
-                components[_elem.key] = c;
-            }
-            c->type = &elem.type;
-            c->props = elem.props.get();
-            if (added) {
-                printf("mount %s\n", elem.type.info().name());
-                c->componentWillMount(this);
-            }
-            return c;
-        };
-
-        virtual void beginChildren()
-        {};
-
-        virtual void push(void *) = 0;
-
-        virtual void endChildren()
-        {};
-
-        Root *newroot(Component<void, void> &instance, void *props)
-        {
-            auto ptr = reinterpret_cast<std::uint8_t *>(&instance) - this->size - sizeof(ComponentState);
-            auto root = reinterpret_cast<Root *>(ptr);
-            if (!reinterpret_cast<ComponentState *>(ptr)->rootInit) {
-                init(*root, props);
-            }
-            return root;
-        }
-
-    protected:
-
-        virtual void init(Root &self, void *props) = 0;
-
-    };
-
-    class Top {
-    public:
-        static void render(Element<void> &elem, Root *root, bool force = false)
-        {
-            bool first = true;
-            auto &component = *root->lookup(elem, first);
-
-            printf("force: %d, first: %d, update: %d\n", force, first, component.shouldComponentUpdate());
-            if (!force && !first && !component.shouldComponentUpdate()) {
-                return;
-            }
-
-            auto next = component.render();
-            void *nextProps = next.props.get();
-            if (next._flags & Flags::Intrinsic) {
-                root->push(nextProps);
-            }
-            if (next._flags & Flags::Portal) {
-                root = root->newroot(component, nextProps);
-            }
-            if (next._flags & Flags::Fragment) {
-                root->beginChildren();
-                for (auto &it : elem.children) { // fixme: buttonBox not passing children
-                    render(it, root, force);
-                }
-                root->endChildren();
-            }
-            if (first) {
-                component.componentDidMount();
-            } else {
-                component.componentDidUpdate();
-            }
+            return *reinterpret_cast<Element<> *>(this);
         }
     };
 
     template<class Component, class... E>
     Element<typename Component::_props>
-    createElement(detail::TypeRef<Component>, typename Component::_props props, E ...children)
+    createElement(detail::TypeRef<Component>, typename Component::_props props, E... children)
     {
         return make(Element<typename Component::_props>, {
             $.key = "";
@@ -264,7 +204,7 @@ namespace rxui {
     }
 
     template<class T>
-    Element<void> intrinsic(std::shared_ptr<T> props, std::uint8_t flags = 0)
+    Element<> intrinsic(std::shared_ptr<T> props, uint8_t flags)
     {
         return make(Element<T>, {
             $._flags = Flags::Intrinsic | flags;
@@ -273,12 +213,5 @@ namespace rxui {
             $.children = {};
             $.type = detail::TypeRef<void>{};
         });
-    }
-
-    void render(Element<void> &elem, Root &root)
-    {
-        root.beginChildren();
-        Top::render(elem, &root);
-        root.endChildren();
     }
 }

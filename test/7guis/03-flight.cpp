@@ -21,7 +21,7 @@ static bool is_date(const std::string &s)
     );
 }
 
-static rxui::Element<void> render(State &state, std::function<void()> &refresh)
+static rxui::Element<> render(State &state, std::function<void()> &refresh)
 {
     return rxui::createElement(
             VBox::T, make(VBoxProps, {}),

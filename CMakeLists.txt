@@ -18,10 +18,15 @@ function(configure target)
     endif ()
 endfunction()
 
-add_library(rxui src/rxui.h)
+add_library(rxui
+        src/rxui.cpp src/rxui.h
+        )
 configure(rxui)
 
-add_library(rxui-efl src/rxui-efl.h)
+add_library(rxui-efl
+        src/rxui-efl.cpp src/rxui-efl.h
+        src/rxui-widgets-gtk.h
+        )
 configure(rxui-efl)
 target_compile_definitions(rxui-efl PUBLIC RXUI_BACKEND_EFL)
 find_package(Elementary REQUIRED)
@@ -38,24 +43,33 @@ if (ELEMENTARY_FOUND AND NOT TARGET Elementary::efl)
 endif ()
 target_link_libraries(rxui-efl
         PUBLIC
+        rxui
         Elementary::efl
         )
 
-add_library(rxui-gtk src/rxui-gtk.h)
+add_library(rxui-gtk
+        src/rxui-gtk.cpp src/rxui-gtk.h
+        src/rxui-widgets-gtk.h
+        )
 configure(rxui-gtk)
 target_compile_definitions(rxui-gtk PUBLIC RXUI_BACKEND_GTK)
 find_package(GTK3 REQUIRED)
 target_link_libraries(rxui-gtk
         PUBLIC
+        rxui
         GTK3::gtk
         )
 
-add_library(rxui-qt src/rxui-qt.h)
+add_library(rxui-qt
+        src/rxui-qt.cpp src/rxui-qt.h
+        src/rxui-widgets-gtk.h
+        )
 configure(rxui-qt)
 target_compile_definitions(rxui-qt PUBLIC RXUI_BACKEND_QT)
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
 target_link_libraries(rxui-qt
         PUBLIC
+        rxui
         Qt5::Widgets
         )
 

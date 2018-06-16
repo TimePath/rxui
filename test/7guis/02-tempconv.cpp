@@ -18,7 +18,7 @@ namespace temp {
     }
 }
 
-static rxui::Element<void> render(State &state, std::function<void()> &refresh)
+static rxui::Element<> render(State &state, std::function<void()> &refresh)
 {
     return rxui::createElement(
             HBox::T, make(HBoxProps, {}),

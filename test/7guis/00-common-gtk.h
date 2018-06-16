@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../src/rxui-gtk.h"
+#include <gtk/gtk.h>
 
 static void activate(GtkApplication *app);
 
@@ -13,7 +14,7 @@ int main(int argc, char **argv)
     return status;
 }
 
-static rxui::Element<void> render(State &state, std::function<void()> &refresh);
+static rxui::Element<> render(State &state, std::function<void()> &refresh);
 
 static void activate(GtkApplication *app)
 {
@@ -23,7 +24,7 @@ static void activate(GtkApplication *app)
     gtk_window_set_position(window, GTK_WIN_POS_CENTER);
 
     auto state = new State;
-    auto root = new GtkRoot(GTK_CONTAINER(window));
+    auto root = new GtkRoot(window);
     auto refresh = new std::function<void()>{};
     *refresh = [=]() {
         auto element = render(*state, *refresh);

@@ -11,7 +11,7 @@ EAPI_MAIN void efl_main(void *data EINA_UNUSED, const Efl_Event *ev EINA_UNUSED)
 
 EFL_MAIN()
 
-static rxui::Element<void> render(State &state, std::function<void()> &refresh);
+static rxui::Element<> render(State &state, std::function<void()> &refresh);
 
 EAPI_MAIN void efl_main(void *data EINA_UNUSED, const Efl_Event *ev EINA_UNUSED)
 {
