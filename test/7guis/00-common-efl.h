@@ -33,17 +33,8 @@ EAPI_MAIN void efl_main(void *data EINA_UNUSED, const Efl_Event *ev EINA_UNUSED)
     auto root = new EflRoot(bx);
     auto refresh = new std::function<void()>{};
     *refresh = [=]() {
-        Eo *data;
-        auto itr = efl_content_iterate(bx);
-        EINA_ITERATOR_FOREACH(itr, data) {
-            evas_object_hide(data);
-        }
-        eina_iterator_free(itr);
-        efl_pack_unpack_all(bx);
-
         auto element = render(*state, *refresh);
         rxui::render(element, *root);
-        // show children
     };
     (*refresh)();
 }

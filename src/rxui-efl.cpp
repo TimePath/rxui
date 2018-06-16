@@ -1,10 +1,13 @@
 #include "rxui-efl.h"
 
+#include <algorithm>
+
 #define EFL_BETA_API_SUPPORT
 #define EFL_EO_API_SUPPORT
 // #define EFL_NOLEGACY_API_SUPPORT
 
 #include <Elementary.h>
+
 
 EflRoot::EflRoot(void *container) : container{container}
 {
@@ -19,17 +22,48 @@ void EflRoot::init(rxui::Root &self, void *props)
     new(&self) EflRoot(w);
 }
 
+void EflRoot::beginChildren()
+{
+    auto self = reinterpret_cast<Eo *>(container);
+    Eo *data;
+    auto itr = efl_content_iterate(self);
+    EINA_ITERATOR_FOREACH(itr, data) {
+        refs.push_back(Ref{data, -1});
+    }
+    eina_iterator_free(itr);
+}
+
 void EflRoot::push(void *it)
 {
-    auto lazy = static_cast<Lazy *>(it);
-    auto obj = reinterpret_cast<Eo *>(container);
-    auto w = lazy->get(obj);
-    if (efl_isa(obj, ELM_SCROLLER_CLASS)) {
-        elm_object_content_set(obj, w);
-    } else {
-        efl_pack(obj, w);
-    }
+    auto self = reinterpret_cast<Eo *>(container);
+    auto w = static_cast<Lazy *>(it)->get(self);
     evas_object_show(w);
+    auto ref = std::find_if(std::begin(refs), std::end(refs), [&](Ref &it) {
+        return it.w == w;
+    });
+    if (ref != std::end(refs)) {
+        ref->status = 0;
+    } else {
+        refs.push_back(Ref{w, 1});
+    }
+}
+
+void EflRoot::endChildren()
+{
+    auto self = reinterpret_cast<Eo *>(container);
+    for (const auto &ref : refs) {
+        auto w = reinterpret_cast<Eo *>(ref.w);
+        if (ref.status < 0) {
+            efl_pack_unpack(self, w);
+        } else if (ref.status > 0) {
+            if (efl_isa(self, ELM_SCROLLER_CLASS)) {
+                elm_object_content_set(self, w);
+            } else {
+                efl_pack(self, w);
+            }
+        }
+    }
+    refs.clear();
 }
 
 Lazy::Lazy(std::function<Eo * (Eo * )> construct) : construct{std::move(construct)}
