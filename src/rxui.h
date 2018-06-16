@@ -112,6 +112,13 @@ namespace rxui {
 
         Component<void, void> *lookup(Element<> &_elem, bool &added);
 
+        struct Ref {
+            void *w;
+            int status;
+        };
+
+        std::vector<Ref> refs;
+
         virtual void beginChildren()
         {}
 

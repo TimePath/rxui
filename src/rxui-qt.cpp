@@ -13,16 +13,59 @@ void QtRoot::init(rxui::Root &self, void *props)
     new(&self) QtRoot(props);
 }
 
+void QtRoot::beginChildren()
+{
+    auto self = reinterpret_cast<QLayout *>(container);
+    for (int i = 0; i < self->count(); ++i)
+    {
+        auto w = self->itemAt(i)->widget();
+        refs.push_back(Ref{w, -1});
+    }
+}
+
 void QtRoot::push(void *it)
 {
     auto obj = static_cast<QObject *>(it);
+    QWidget *w;
     if (auto layout = dynamic_cast<QLayout *>(obj)) {
-        auto w = new QWidget;
-        w->setLayout(layout);
-        reinterpret_cast<QLayout *>(container)->addWidget(w);
+        auto p = "_widget";
+        auto vr = layout->property(p);
+        if (vr.isValid()) {
+            w = vr.value<QWidget *>();
+        } else {
+            auto widget = new QWidget;
+            widget->setLayout(layout);
+            QVariant vw;
+            vw.setValue(widget);
+            layout->setProperty(p, vw);
+            w = widget;
+        }
     } else if (auto widget = dynamic_cast<QWidget *>(obj)) {
-        reinterpret_cast<QLayout *>(container)->addWidget(widget);
+        w = widget;
+    } else {
+        w = nullptr;
     }
+    auto ref = std::find_if(std::begin(refs), std::end(refs), [&](Ref &it) {
+        return it.w == w;
+    });
+    if (ref != std::end(refs)) {
+        ref->status = 0;
+    } else {
+        refs.push_back(Ref{w, 1});
+    }
+}
+
+void QtRoot::endChildren()
+{
+    auto self = reinterpret_cast<QLayout *>(container);
+    for (const auto &ref : refs) {
+        if (ref.status < 0) {
+            self->removeWidget(reinterpret_cast<QWidget *>(ref.w));
+        } else if (ref.status > 0) {
+            self->addWidget(reinterpret_cast<QWidget *>(ref.w));
+        }
+    }
+    refs.clear();
 }
 
 HBox::HBox() : handle{std::make_shared<QHBoxLayout>()}

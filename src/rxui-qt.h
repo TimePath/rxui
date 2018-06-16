@@ -10,7 +10,11 @@ public:
 
     void init(Root &self, void *props) override;
 
+    void beginChildren() override;
+
     void push(void *it) override;
+
+    void endChildren() override;
 };
 
 template<class Self, class Props>

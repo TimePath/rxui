@@ -29,11 +29,6 @@ static void activate(QApplication *)
     auto root = new QtRoot(rootLayout);
     auto refresh = new std::function<void()>{};
     *refresh = [=]() {
-        while (rootLayout->count()) {
-            auto item = rootLayout->takeAt(0);
-            delete item->widget();
-            delete item;
-        }
         auto element = render(*state, *refresh);
         rxui::render(element, *root);
     };

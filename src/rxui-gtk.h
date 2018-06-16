@@ -12,13 +12,6 @@ public:
 
     void init(Root &self, void *props) override;
 
-    struct Ref {
-        void *w;
-        int status;
-    };
-
-    std::vector<Ref> refs;
-
     void beginChildren() override;
 
     void push(void *it) override;
