@@ -141,6 +141,7 @@ rxui::Element<> Combo::render()
 
     {
         QSignalBlocker blocker{handle};
+        handle->clear();
         for (auto &it : self->props->children) {
             handle->addItem(it.label.c_str(), it.value.c_str());
         }
@@ -237,6 +238,7 @@ rxui::Element<> List::render()
 
     handle->setSelectionMode(QAbstractItemView::SelectionMode::SingleSelection);
 
+    handle->clear();
     int active = -1;
     int i = -1;
     for (auto &it : self->props->children) {
