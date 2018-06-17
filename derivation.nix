@@ -21,6 +21,8 @@ stdenv.mkDerivation rec {
         epoxy
         at-spi2-core
 
+        jdk
+
         qt5.qtbase
     ];
 

@@ -73,6 +73,28 @@ target_link_libraries(rxui-qt
         Qt5::Widgets
         )
 
+add_library(rxui-swing
+        src/rxui-swing.cpp src/rxui-swing.h src/jni/jni.h
+        src/rxui-widgets-gtk.h
+        )
+configure(rxui-swing)
+target_compile_definitions(rxui-swing PUBLIC RXUI_BACKEND_SWING)
+find_package(JNI REQUIRED)
+if (JNI_FOUND AND NOT TARGET swing)
+    add_library(swing INTERFACE IMPORTED)
+    set_target_properties(swing PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES
+            "${JAVA_INCLUDE_PATH}"
+            INTERFACE_LINK_LIBRARIES
+            "${JAVA_JVM_LIBRARY}"
+            )
+endif ()
+target_link_libraries(rxui-swing
+        PUBLIC
+        rxui
+        swing
+        )
+
 function(test name files)
     add_executable(${name}-efl test/7guis/00-common.h test/7guis/00-common-efl.h ${files})
     configure(${name}-efl)
@@ -85,6 +107,12 @@ function(test name files)
     add_executable(${name}-qt test/7guis/00-common.h test/7guis/00-common-qt.h ${files})
     configure(${name}-qt)
     target_link_libraries(${name}-qt rxui-qt)
+
+    add_executable(${name}-swing test/7guis/00-common.h test/7guis/00-common-swing.h ${files})
+    configure(${name}-swing)
+    # target_link_libraries(${name}-swing rxui-swing)
+    target_compile_definitions(${name}-swing PUBLIC RXUI_BACKEND_SWING)
+    target_link_libraries(${name}-swing swing)
 endfunction()
 
 test(rxui-7guis-01-counter test/7guis/01-counter.cpp)
