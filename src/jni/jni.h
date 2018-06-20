@@ -3,12 +3,13 @@
 #include <jni.h>
 #include <cassert>
 
-namespace compile {
 #if defined NDEBUG
 # define ASSERT(CHECK) void(0)
 #else
 # define ASSERT(CHECK) ((CHECK) ? void(0) : []{assert(!#CHECK);}())
 #endif
+
+namespace compile {
 
     namespace detail {
         template<std::size_t... I>
@@ -88,95 +89,156 @@ constexpr const compile::string<N_Z - 1> const_string(const char (&lit)[N_Z])
     return compile::string<N_Z - 1>(lit);
 }
 
-#define VALUE(expr) \
+#define JNIX_TYPES(_) \
+    _(jobject, Object, sig<java::lang::Object>::value()) \
+    _(jboolean, Boolean, const_string("Z")) \
+    _(jbyte, Byte, const_string("B")) \
+    _(jchar, Char, const_string("C")) \
+    _(jshort, Short, const_string("S")) \
+    _(jint, Int, const_string("I")) \
+    _(jlong, Long, const_string("J")) \
+    _(jfloat, Float, const_string("F")) \
+    _(jdouble, Double, const_string("D")) \
+    _(void, Void, const_string("V")) \
+    /**/
+
+namespace java {
+    namespace lang {
+        struct Object {
+            static constexpr auto &fqn = const_string("java/lang/Object");
+        };
+
+        struct String {
+            static constexpr auto &fqn = const_string("java/lang/String");
+        };
+    }
+}
+
+namespace signatures {
+
+#define JNIX_VALUE(expr) \
     static constexpr auto value() -> decltype(expr) \
     { return expr; }
 
-template<class T>
-struct sig {
-    VALUE(const_string("L") + T::fqn + const_string(";"))
-};
-
-template<class T>
-struct sig<T[]> {
-    VALUE(const_string("[") + sig<T>::value())
-};
-
-struct sum {
     template<class T>
-    static constexpr T apply(T head)
-    {
-        return head;
-    }
+    struct sig {
+        JNIX_VALUE(const_string("L") + T::fqn + const_string(";"))
+    };
 
-    template<class T, class... Rest>
-    static constexpr auto apply(T head, Rest &&...tail) -> decltype(head + sum::apply(std::forward<Rest>(tail)...))
-    {
-        return head + sum::apply(std::forward<Rest>(tail)...);
-    }
-};
+    template<class T>
+    struct sig<T[]> {
+        JNIX_VALUE(const_string("[") + sig<T>::value())
+    };
 
-template<class R, class... Args>
-struct sig<R(Args...)> {
-    VALUE(const_string("(") + sum::apply(sig<Args>::value()...) + const_string(")") + sig<R>::value())
-};
+    struct sum {
+        template<class T>
+        static constexpr T apply(T head)
+        {
+            return head;
+        }
 
-template<class R>
-struct sig<R()> {
-    VALUE(const_string("(") + const_string(")") + sig<R>::value())
-};
+        template<class T, class... Rest>
+        static constexpr auto apply(T head, Rest &&...tail) -> decltype(head + sum::apply(std::forward<Rest>(tail)...))
+        {
+            return head + sum::apply(std::forward<Rest>(tail)...);
+        }
+    };
 
-template<>
-struct sig<void> {
-    VALUE(const_string("V"))
-};
+    template<class R, class... Args>
+    struct sig<R(Args...)> {
+        JNIX_VALUE(const_string("(") + sum::apply(sig<Args>::value()...) + const_string(")") + sig<R>::value())
+    };
 
-template<>
-struct sig<jboolean> {
-    VALUE(const_string("Z"))
-};
+    template<class R>
+    struct sig<R()> {
+        JNIX_VALUE(const_string("(") + const_string(")") + sig<R>::value())
+    };
 
-template<>
-struct sig<jbyte> {
-    VALUE(const_string("B"))
-};
+#define X(T, Name, S) \
+    template<> \
+    struct sig<T> { \
+        JNIX_VALUE(S) \
+    };
 
-template<>
-struct sig<jchar> {
-    VALUE(const_string("C"))
-};
+    JNIX_TYPES(X)
 
-template<>
-struct sig<jshort> {
-    VALUE(const_string("S"))
-};
+#undef X
 
-template<>
-struct sig<jint> {
-    VALUE(const_string("I"))
-};
-
-template<>
-struct sig<jlong> {
-    VALUE(const_string("J"))
-};
-
-template<>
-struct sig<jfloat> {
-    VALUE(const_string("F"))
-};
-
-template<>
-struct sig<jdouble> {
-    VALUE(const_string("D"))
-};
-
-template<class T>
-struct SIG {
-    static constexpr auto &&str = sig<T>::value();
-};
+    template<>
+    struct sig<jstring> {
+        JNIX_VALUE(sig<java::lang::String>::value())
+    };
+}
 
 namespace jni {
+    template<class T>
+    struct sig {
+        static constexpr auto &&str = signatures::sig<T>::value();
+    };
+
+    template<class... Args>
+    class Constructor;
+
+    template<class T>
+    class Method;
+
+    class Class {
+    public:
+        JNIEnv *env;
+        jclass clazz;
+
+        template<class... Args>
+        Constructor<Args...> ctor()
+        {
+            return {env, clazz, env->GetMethodID(clazz, "<init>", sig<void(Args...)>::str)};
+        }
+
+        template<class T>
+        Method<T> method(const char *name)
+        {
+            return {env, env->GetMethodID(clazz, name, sig<T>::str)};
+        }
+    };
+
+    template<class... Args>
+    class Constructor {
+    public:
+        JNIEnv *env;
+        jclass clazz;
+        jmethodID id;
+
+        jobject operator()(Args &&...args) {
+            return env->NewObject(clazz, id, args...);
+        }
+    };
+
+    template<class T>
+    struct MethodCall;
+
+    template<class R, class... Args>
+    class Method<R(Args...)> {
+    public:
+        JNIEnv *env;
+        jmethodID id;
+
+        R operator()(jobject self, Args &&...args) {
+            return MethodCall<R>::call(env, self, id, args...);
+        }
+    };
+
+#define MethodCall(T, F) \
+    template <> \
+    struct MethodCall<T> { \
+        template<class... Args> \
+        static T call(JNIEnv *env, Args &&...args) { \
+            return env->F(args...); \
+        } \
+    };
+#define X(T, Name, S) MethodCall(T, Call ## Name ## Method)
+    JNIX_TYPES(X)
+#undef X
+#undef MethodCall
+
     class Env {
     public:
         JNIEnv *env;
@@ -187,22 +249,16 @@ namespace jni {
         }
 
         template<class T>
-        jclass FindClass()
+        Class FindClass()
         {
-            return env->FindClass(T::fqn);
+            return {env, env->FindClass(T::fqn)};
         }
 
         template<class T>
         jobject GetStaticObjectField(jclass clazz, const char *name)
         {
-            auto field = env->GetStaticFieldID(clazz, name, SIG<T>::str);
+            auto field = env->GetStaticFieldID(clazz, name, sig<T>::str);
             return env->GetStaticObjectField(clazz, field);
-        }
-
-        template<class T>
-        jmethodID GetMethodID(jclass clazz, const char *name)
-        {
-            return env->GetMethodID(clazz, name, SIG<T>::str);
         }
     };
 }

@@ -7,23 +7,13 @@
 
 static int activate();
 
-struct PrintStream_t;
-
-struct System_t {
-    static constexpr auto &fqn = const_string("java/lang/System");
-};
-
-struct PrintStream_t {
-    static constexpr auto &fqn = const_string("java/io/PrintStream");
-};
-
-struct String_t {
-    static constexpr auto &fqn = const_string("java/lang/String");
-};
-
-struct JFrame_t {
-    static constexpr auto &fqn = const_string("javax/swing/JFrame");
-};
+namespace javax {
+    namespace swing {
+        struct JFrame {
+            static constexpr auto &fqn = const_string("javax/swing/JFrame");
+        };
+    }
+}
 
 int main(int argc, char **argv)
 {
@@ -42,11 +32,12 @@ int main(int argc, char **argv)
     jni::Env env{};
     JNI_CreateJavaVM(&jvm, reinterpret_cast<void **>(&env.env), &args);
 
-    auto JFrame = env.FindClass<JFrame_t>();
-    auto init = env.GetMethodID<void(String_t)>(JFrame, "<init>");
-    auto setVisible = env.GetMethodID<void(jboolean)>(JFrame, "setVisible");
-    auto frame = env->NewObject(JFrame, init, env->NewStringUTF("Window"));
-    env->CallVoidMethod(frame, setVisible, true);
+    auto JFrame = env.FindClass<javax::swing::JFrame>();
+    auto JFrame_new = JFrame.ctor<jstring>();
+    auto JFrame_setVisible = JFrame.method<void(jboolean)>("setVisible");
+
+    auto frame = JFrame_new(env->NewStringUTF("Window"));
+    JFrame_setVisible(frame, true);
 
     sleep(-1);
 
